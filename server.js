@@ -2,11 +2,12 @@ require("dotenv").config();
 
 const mongoose = require("mongoose");
 const express = require("express");
-const TeleBot = require("telebot");
+const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
 
 const Model = require("./Model");
 const server = express();
+const token = process.env.TELEGRAM_BOT_TOKEN;
 
 // Connect to database
 mongoose
@@ -17,15 +18,13 @@ mongoose
     .then(() => console.log("Mongoose Coonected"))
     .catch((err) => console.log(err));
 
-//instantiate Telebot with our token got in the BtFather
-const bot = new TeleBot({
-    token: process.env.TELEGRAM_BOT_TOKEN,
-});
+// Create a bot that uses 'polling' to fetch new updates
+const bot = new TelegramBot(token, { polling: true });
 
-bot.on(["/start", "/salam"], (msg) => {
+bot.onText(/\/start/, (msg, match) => {
     return bot.sendMessage(
-        msg.from.id,
-        `Assalamun alaykum warahmatullahi wabarakaatuh Dear ${msg.from.username}
+        msg.chat.id,
+        `Assalamun alaykum warahmatullahi wabarakaatuh Dear ${msg.chat.username}
         
 It's good if you can share people my link to add me up for hadith, but note that you have to /subscribe to get subscribed.
 
@@ -40,11 +39,11 @@ You can:
     );
 });
 
-bot.on(["/help"], (msg) => {
+bot.onText(/\/help/, (msg, match) => {
     bot.sendMessage(
-        msg.from.id,
+        msg.chat.id,
         `
-Assalamun alykum dear ${msg.from.username}
+Assalamun alykum dear ${msg.chat.username}
 
 You can:
 /help to get help
@@ -79,7 +78,7 @@ setTimeout(() => {
         .catch((err) => console.log(err));
 }, 10800000);
 
-bot.on(["/hadith"], (msg) => {
+bot.onText(/\/hadith/, (msg, match) => {
     return axios({
         method: "get",
         url: "https://api.sunnah.com/v1/hadiths/random",
@@ -90,17 +89,17 @@ bot.on(["/hadith"], (msg) => {
         .then((res) => res.data)
         .then((data) => {
             bot.sendMessage(
-                msg.from.id,
+                msg.chat.id,
                 data.hadith[0].body.replace(/<[^>]*>?/gm, "")
             );
         })
         .catch((err) => console.log(err));
 });
 
-bot.on(["/subscribe"], (msg) => {
+bot.onText(/\/subscribe/, (msg, match) => {
     const user = {
-        id: msg.from.id,
-        username: msg.from.username,
+        id: msg.chat.id,
+        username: msg.chat.username,
     };
     Model.find({ id: user.id }).then((users) => {
         if (users.length === 0) {
@@ -128,9 +127,10 @@ Kindly share me to your friends https://t.me/DailyHadithDrop_bot
     });
 });
 
-bot.on(["/unsubscribe"], (msg) => {
+bot.onText(/\/unsubscribe/, (msg, match) => {
+    console.log(msg);
     bot.sendMessage(
-        msg.from.id,
+        msg.chat.id,
         `
 Hi Dear, We're still working on the /unsubscribe .Probably, it seems we're disturbing you, but not. Kindly bare with us You will be recieving hadith every 3 hours insha Allah.
 
@@ -139,12 +139,14 @@ Kindly share me to your friends https://t.me/DailyHadithDrop_bot
     );
 });
 
-function test() {
-    Model.find({}).then((result) =>
-        result.forEach((user) => console.log(user.id, user.username))
-    );
-}
-test();
+bot.on("new_chat_members", (user, match) => {
+    const msg = `
+Assalamun alaykum warahmatullahi wabarakaatuh Dear ${user.new_chat_member.username}
+Kindly  Share your friends https://t.me/DailyHadithDrop_bot,
+and also kindly subscribe to /subscribe@DailyHadithDrop_bot.
+`;
+    bot.sendMessage(user.chat.id, msg);
+});
 
-bot.start();
 server.listen(3000, () => console.log(`Server started on port 3000`));
+
